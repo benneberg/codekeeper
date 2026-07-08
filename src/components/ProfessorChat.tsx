@@ -64,11 +64,32 @@ export default function ProfessorChat({ repo }: Props) {
       }));
 
       const token = sessionStorage.getItem("arip_api_token") || "arip-secure-session-token-2026";
+      
+      const groqKey = localStorage.getItem("arip_groq_api_key") || "";
+      const openRouterKey = localStorage.getItem("arip_openrouter_api_key") || "";
+      
+      const fastProvider = localStorage.getItem("arip_fast_provider") || "Groq fast inference api";
+      const fastModel = localStorage.getItem("arip_fast_model") || "llama-3-8b-instant";
+      
+      const mediumProvider = localStorage.getItem("arip_medium_provider") || "OpenRouter";
+      const mediumModel = localStorage.getItem("arip_medium_model") || "google/gemini-2.5-flash";
+      
+      const premiumProvider = localStorage.getItem("arip_premium_provider") || "OpenRouter";
+      const premiumModel = localStorage.getItem("arip_premium_model") || "anthropic/claude-3.5-sonnet";
+
       const res = await fetch("/api/ask", {
         method: "POST",
         headers: { 
           "Content-Type": "application/json",
-          "x-api-token": token
+          "x-api-token": token,
+          "x-groq-key": groqKey,
+          "x-openrouter-key": openRouterKey,
+          "x-fast-provider": fastProvider,
+          "x-fast-model": fastModel,
+          "x-medium-provider": mediumProvider,
+          "x-medium-model": mediumModel,
+          "x-premium-provider": premiumProvider,
+          "x-premium-model": premiumModel
         },
         body: JSON.stringify({
           question: textToSend,

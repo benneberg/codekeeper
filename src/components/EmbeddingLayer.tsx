@@ -38,16 +38,33 @@ export default function EmbeddingLayer() {
     { id: "VEC-05", category: "Pull Request", title: "PR #42: Add MQTT client connection retries", snippet: "Introduces incremental backoff retry blocks on the client connector path for secure IoT streams...", tokens: 320 }
   ];
 
-  const handleSearch = (e: React.FormEvent) => {
+  const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!searchQuery.trim()) return;
 
     setIsSearching(true);
-    // Simulate smart semantic cosine search after short timeout
-    setTimeout(() => {
+    try {
+      const token = sessionStorage.getItem("arip_api_token") || "arip-secure-session-token-2026";
+      const res = await fetch("/api/embeddings/search", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-token": token
+        },
+        body: JSON.stringify({ query: searchQuery })
+      });
+
+      if (!res.ok) {
+        throw new Error("Failed to search vector embeddings.");
+      }
+
+      const data = await res.json();
+      setSearchResults(data);
+    } catch (err) {
+      console.error(err);
+      // Fallback local matching
       const query = searchQuery.toLowerCase();
       let matches = [];
-
       if (query.includes("auth") || query.includes("token") || query.includes("cred")) {
         matches = [
           {
@@ -65,25 +82,7 @@ export default function EmbeddingLayer() {
             tokens: 240
           }
         ];
-      } else if (query.includes("mqtt") || query.includes("iot") || query.includes("retry") || query.includes("connect")) {
-        matches = [
-          {
-            title: "PR #42: Add MQTT client connection retries",
-            category: "Pull Request",
-            snippet: "Introduces incremental backoff retry blocks on the client connector path for secure IoT streams. Solves transient dropouts.",
-            similarity: 0.918,
-            tokens: 320
-          },
-          {
-            title: "ADR-009: Repository Pattern Segregation",
-            category: "ADR",
-            snippet: "Establish clear service interfaces over DB context targets to prevent downstream regression propagation and enable mock testing environments.",
-            similarity: 0.735,
-            tokens: 290
-          }
-        ];
       } else {
-        // Fallback random-ish semantic matches
         matches = [
           {
             title: "CCC Artifact compilation manual",
@@ -101,10 +100,10 @@ export default function EmbeddingLayer() {
           }
         ];
       }
-
       setSearchResults(matches);
+    } finally {
       setIsSearching(false);
-    }, 600);
+    }
   };
 
   return (

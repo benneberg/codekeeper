@@ -125,8 +125,8 @@ export default function SettingsPanel() {
     }
   };
 
-  // Simulated GitHub Auth / Sync Flow
-  const handleGithubConnect = () => {
+  // Real GitHub Auth / Sync Flow
+  const handleGithubConnect = async () => {
     if (!githubToken.trim()) {
       alert("Please enter a valid GitHub auth token or Personal Access Token (PAT) first.");
       return;
@@ -134,36 +134,76 @@ export default function SettingsPanel() {
 
     setSyncProgress(10);
     setSyncStatusText("Connecting to api.github.com secure gateway...");
-    setSyncHistory([`[GITHUB] Initiating OAuth connection with PAT: *********`]);
+    setSyncHistory([`[GITHUB] Initiating connection with PAT: *********`]);
 
-    setTimeout(() => {
-      setSyncProgress(35);
+    try {
+      const token = sessionStorage.getItem("arip_api_token") || "arip-secure-session-token-2026";
+      const res = await fetch("/api/github/sync", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-token": token
+        },
+        body: JSON.stringify({ token: githubToken })
+      });
+
+      setSyncProgress(45);
       setSyncStatusText("Verifying token scopes and repository access permissions...");
-      setSyncHistory(prev => [...prev, `[GITHUB] Handshake completed successfully. Scopes detected: 'repo', 'workflow'`]);
-    }, 800);
 
-    setTimeout(() => {
-      setSyncProgress(65);
-      setSyncStatusText("Synchronizing selected repository files & AST schemas...");
-      setSyncHistory(prev => [...prev, `[GITHUB] Fetching metadata for ${enabledRepoIds.length} active workspace bindings...`]);
-    }, 1600);
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.error || "GitHub sync failed.");
+      }
 
-    setTimeout(() => {
-      setSyncProgress(90);
-      setSyncStatusText("Validating abstract syntax tree symbols and compiling indices...");
-      setSyncHistory(prev => [...prev, `[GITHUB] Synced ${enabledRepoIds.length} repositories successfully without telemetry gaps.`]);
-    }, 2400);
+      const repos = await res.json();
+      
+      setSyncProgress(75);
+      setSyncStatusText(`Retrieved ${repos.length} live repositories. Compiling workspace indices...`);
+      setSyncHistory(prev => [
+        ...prev, 
+        `[GITHUB] Handshake completed successfully. Active repositories retrieved: ${repos.length}`
+      ]);
 
-    setTimeout(() => {
+      // Merge / overwrite available repos with real retrieved repos
+      const mockList = [
+        { id: "iot-gateway", name: "IoT-Gateway", description: "Enterprise gateway for device lifecycle registration and telemetry digestion.", language: "C#", filesCount: 5 },
+        { id: "secure-auth-service", name: "secure-auth-service", description: "OAuth2 authentication server, JWT signer, and security gatekeeper.", language: "TypeScript", filesCount: 6 },
+        { id: "enterprise-billing-system", name: "enterprise-billing-system", description: "Invoicing pipeline, subscription triggers, and Stripe integrations.", language: "Python", filesCount: 4 },
+      ];
+
+      // To avoid duplicates, filter mock ones that may have the same ID
+      const filteredMocks = mockList.filter(m => !repos.some((r: any) => r.id === m.id));
+      const mergedList = [...filteredMocks, ...repos];
+      setAvailableRepos(mergedList);
+
+      // Save to localStorage
+      localStorage.setItem("arip_custom_repos", JSON.stringify(repos));
+      
+      // Auto-enable all retrieved repositories as well
+      const newEnabledRepoIds = [...enabledRepoIds, ...repos.map((r: any) => r.id)];
+      const uniqueEnabledIds = Array.from(new Set(newEnabledRepoIds));
+      setEnabledRepoIds(uniqueEnabledIds);
+      localStorage.setItem("arip_enabled_repos", JSON.stringify(uniqueEnabledIds));
+
+      setSyncProgress(100);
+      setSyncStatusText("Validating symbols and compiling AST indices...");
+
+      setTimeout(() => {
+        setSyncProgress(null);
+        setIsGithubConnected(true);
+        localStorage.setItem("arip_github_authenticated", "true");
+        localStorage.setItem("arip_github_token", githubToken);
+        
+        // Dispatch storage event so App.tsx can reload repositories dynamically
+        window.dispatchEvent(new Event("storage"));
+        alert(`GitHub authentication and synchronization completed successfully! Merged ${repos.length} real repositories into your workspace cockpit.`);
+      }, 800);
+
+    } catch (err: any) {
       setSyncProgress(null);
-      setIsGithubConnected(true);
-      localStorage.setItem("arip_github_authenticated", "true");
-      // Persist token if not already
-      localStorage.setItem("arip_github_token", githubToken);
-      // Dispatch storage event so App.tsx can reload repositories dynamically
-      window.dispatchEvent(new Event("storage"));
-      alert("GitHub authentication and repository synchronization completed!");
-    }, 3200);
+      setSyncHistory(prev => [...prev, `[ERROR] GitHub sync failed: ${err.message}`]);
+      alert(`GitHub connection error: ${err.message}`);
+    }
   };
 
   // Toggle individual repository permissions

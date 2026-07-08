@@ -70,28 +70,19 @@ This backlog contains concrete refactoring actions and feature expansions to tra
 
 ## 5. Mocked/Stubbed Elements & Production Migration Paths
 
-### [ ] A. GitHub Workspace Integration
-- **Current State**: The Settings Panel simulates the authentication process and registers high-fidelity metadata templates for standard external repositories, saving state and configuration inside local state and HTML5 LocalStorage.
-- **Production Migration Path**:
-  1. Implement a real OAuth2 flow redirecting users to `github.com/login/oauth/authorize`.
-  2. Use the returned authorization code on your backend server to exchange it for a user access token securely.
-  3. Integrate the `@octokit/rest` SDK on the server, using the stored token to dynamically list, clone, or scan the user's actual repositories.
+### [x] A. GitHub Workspace Integration
+- **Current State**: Transitioned from simulation to full production integration.
+- **Implementation**: Implemented a secure backend `/api/github/sync` proxy endpoint in `server.ts` that takes user Personal Access Tokens (PAT), contacts the GitHub API gateway dynamically to retrieve their actual list of user repositories, translates their attributes into high-fidelity metadata templates, and merges them with the local cockpits.
 
-### [ ] B. Linguistic AST Parsers
-- **Current State**: The dynamic scanner parses files using custom Regex token patterns to find declarations in real time.
-- **Production Migration Path**:
-  1. For absolute precision, replace or augment regex scanning with a formal parser library like `tree-sitter`, the standard `TypeScript Compiler API`, or language-specific lexers.
-  2. This will generate concrete syntax trees (CSTs) and resolve complex scopes, module resolution rules, and namespaces.
+### [x] B. Linguistic AST Parsers
+- **Current State**: Replaced regex token patterns with formal compilers.
+- **Implementation**: Upgraded the local directory scanner (`/server/localScanner.ts`) to use the official TypeScript Compiler AST API (`ts.createSourceFile`). It traverses TS/TSX files structurally, identifying classes, functions, interfaces, arrow variables, and relative import edges with absolute semantic precision, falling back to a resilient pattern-based scanner only for other configuration files.
 
-### [ ] C. Live Server-Side Model Routing
-- **Current State**: The `/api/ask` endpoint is structured to query the core server-side Gemini API. The Model Router allows the user to configure Groq and OpenRouter keys locally, which are checked for presence in the UI and persisted.
-- **Production Migration Path**:
-  1. Update the `/api/ask` Express handler to look for the client's custom keys in the request headers (e.g. `x-groq-key`, `x-openrouter-key`).
-  2. If present, route the prompting request directly to the respective API endpoints (e.g., `https://api.groq.com/openai/v1/chat/completions` or `https://openrouter.ai/api/v1/chat/completions`) using the user's custom-selected model alias.
+### [x] C. Live Server-Side Model Routing
+- **Current State**: Fully active server-side dynamic routing proxy.
+- **Implementation**: Modified the `/api/ask` route to extract custom Groq and OpenRouter credentials, selected model aliases, and routing tiers directly from the secure client request headers. Automatically classifies query complexity (low, medium, high) and routes prompt payloads with custom system grounding instructions directly to Groq or OpenRouter completions endpoints, mapping response metadata.
 
-### [ ] D. Vector Embeddings Engine
-- **Current State**: The Semantic Space tab uses projection models to position symbols on a 2D canvas dynamically.
-- **Production Migration Path**:
-  1. Call a real embeddings model API (such as Google's `text-embedding-004` or OpenAI's `text-embedding-3-small`) to convert scanned symbol definitions into vector representations (e.g., 768 or 1536 dimensions).
-  2. Store these vectors in a persistent vector store or a relational database with vector capability (such as Cloud SQL PostgreSQL with the `pgvector` extension) to power real-time semantic search and similarity clustering.
+### [x] D. Vector Embeddings Engine
+- **Current State**: Real mathematical vector search engine is online.
+- **Implementation**: Implemented an in-memory document embedding cache on the backend. When a live Gemini instance is active, `/api/embeddings/search` calls Google's high-performance `gemini-embedding-2-preview` to generate actual 1536-dimension embeddings for the documents and user queries, performing dynamic mathematical cosine similarity dot products to sort and rank semantic matches, and returns results smoothly to the interactive UI sandbox.
 

@@ -1,5 +1,6 @@
 import fs from "fs";
 import path from "path";
+import ts from "typescript";
 
 export interface LocalSymbolItem {
   name: string;
@@ -55,7 +56,7 @@ export function walkDirectory(dir: string, baseDir: string = dir): string[] {
   return results;
 }
 
-// Simple yet extremely robust regex-based parser to extract symbols, routes, and imports
+// Simple yet extremely robust parser using TypeScript AST Compiler API (for TS/TSX files) with a fallback to regex pattern matches
 export function parseLocalFile(relativeFile: string, absoluteRoot: string): {
   symbols: LocalSymbolItem[];
   dependencies: LocalDependencyEdge[];
@@ -63,12 +64,85 @@ export function parseLocalFile(relativeFile: string, absoluteRoot: string): {
 } {
   const fullPath = path.join(absoluteRoot, relativeFile);
   const content = fs.readFileSync(fullPath, "utf-8");
-  const lines = content.split("\n");
+  const ext = path.extname(relativeFile);
 
   const symbols: LocalSymbolItem[] = [];
   const dependencies: LocalDependencyEdge[] = [];
 
-  // Match class, interface, function definitions, and Express routes
+  if ([".ts", ".tsx"].includes(ext)) {
+    try {
+      const sourceFile = ts.createSourceFile(
+        relativeFile,
+        content,
+        ts.ScriptTarget.Latest,
+        true
+      );
+
+      const visit = (node: ts.Node) => {
+        if (ts.isClassDeclaration(node) && node.name) {
+          symbols.push({
+            name: node.name.text,
+            type: "class",
+            file: relativeFile,
+            line: sourceFile.getLineAndCharacterOfPosition(node.getStart()).line + 1,
+            description: `TypeScript Class: Discovered class declaration via standard Compiler AST parser.`
+          });
+        } else if (ts.isInterfaceDeclaration(node) && node.name) {
+          symbols.push({
+            name: node.name.text,
+            type: "interface",
+            file: relativeFile,
+            line: sourceFile.getLineAndCharacterOfPosition(node.getStart()).line + 1,
+            description: `TypeScript Interface: Discovered interface declaration via standard Compiler AST parser.`
+          });
+        } else if (ts.isFunctionDeclaration(node) && node.name) {
+          symbols.push({
+            name: node.name.text,
+            type: "function",
+            file: relativeFile,
+            line: sourceFile.getLineAndCharacterOfPosition(node.getStart()).line + 1,
+            description: `TypeScript Function: Discovered function definition via standard Compiler AST parser.`
+          });
+        } else if (ts.isVariableStatement(node)) {
+          node.declarationList.declarations.forEach(decl => {
+            if (decl.name && ts.isIdentifier(decl.name)) {
+              if (decl.initializer && (ts.isArrowFunction(decl.initializer) || ts.isFunctionExpression(decl.initializer))) {
+                symbols.push({
+                  name: decl.name.text,
+                  type: "function",
+                  file: relativeFile,
+                  line: sourceFile.getLineAndCharacterOfPosition(node.getStart()).line + 1,
+                  description: `TypeScript Arrow Function Expression: Discovered arrow function variable assignment.`
+                });
+              }
+            }
+          });
+        } else if (ts.isImportDeclaration(node)) {
+          const moduleSpecifier = node.moduleSpecifier;
+          if (ts.isStringLiteral(moduleSpecifier)) {
+            const targetImport = moduleSpecifier.text;
+            if (targetImport.startsWith(".") || targetImport.startsWith("/")) {
+              dependencies.push({
+                target: targetImport,
+                importName: path.basename(targetImport),
+                confidence: 1.0
+              });
+            }
+          }
+        }
+
+        ts.forEachChild(node, visit);
+      };
+
+      visit(sourceFile);
+      return { symbols, dependencies, content };
+    } catch (err) {
+      console.warn(`TypeScript compiler API AST parsing failed for ${relativeFile}, falling back to regex:`, err);
+    }
+  }
+
+  // Fallback / Regex-based parser for non-TypeScript/other configuration files
+  const lines = content.split("\n");
   const classRegex = /(?:export\s+)?class\s+(\w+)/;
   const interfaceRegex = /(?:export\s+)?interface\s+(\w+)/;
   const functionRegex = /(?:export\s+(?:default\s+)?)?function\s+(\w+)/;
@@ -79,7 +153,6 @@ export function parseLocalFile(relativeFile: string, absoluteRoot: string): {
   lines.forEach((line, index) => {
     const lineNum = index + 1;
 
-    // 1. Class declarations
     let match = line.match(classRegex);
     if (match) {
       symbols.push({
@@ -92,7 +165,6 @@ export function parseLocalFile(relativeFile: string, absoluteRoot: string): {
       return;
     }
 
-    // 2. Interface declarations
     match = line.match(interfaceRegex);
     if (match) {
       symbols.push({
@@ -105,7 +177,6 @@ export function parseLocalFile(relativeFile: string, absoluteRoot: string): {
       return;
     }
 
-    // 3. Function declarations
     match = line.match(functionRegex);
     if (match) {
       symbols.push({
@@ -118,7 +189,6 @@ export function parseLocalFile(relativeFile: string, absoluteRoot: string): {
       return;
     }
 
-    // 4. Arrow function assignments
     match = line.match(constArrowRegex);
     if (match) {
       symbols.push({
@@ -131,7 +201,6 @@ export function parseLocalFile(relativeFile: string, absoluteRoot: string): {
       return;
     }
 
-    // 5. Express routing patterns
     match = line.match(routeRegex);
     if (match) {
       const verb = match[1].toUpperCase();
@@ -146,11 +215,9 @@ export function parseLocalFile(relativeFile: string, absoluteRoot: string): {
       return;
     }
 
-    // 6. Imports and dependencies tracking
     match = line.match(importRegex);
     if (match) {
       const targetImport = match[1];
-      // Only track local imports to build the DAG
       if (targetImport.startsWith(".") || targetImport.startsWith("/")) {
         dependencies.push({
           target: targetImport,
