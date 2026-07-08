@@ -10,6 +10,7 @@ import ArchitectAgentPanel from "./components/ArchitectAgentPanel";
 import RepositoryScanner from "./components/RepositoryScanner";
 import ModelRouter from "./components/ModelRouter";
 import EmbeddingLayer from "./components/EmbeddingLayer";
+import SettingsPanel from "./components/SettingsPanel";
 import InfoModal from "./components/InfoModal";
 import { MockRepository } from "../server/mockRepositories";
 import {
@@ -25,49 +26,200 @@ import {
   GitBranch,
   Shuffle,
   Database,
-  Info
+  Info,
+  Settings
 } from "lucide-react";
 
 export default function App() {
   const [repositories, setRepositories] = useState<any[]>([]);
   const [selectedRepoId, setSelectedRepoId] = useState<string | null>(null);
   const [activeRepo, setActiveRepo] = useState<MockRepository | null>(null);
-  const [compiledRepos, setCompiledRepos] = useState<string[]>([]);
+  const [compiledRepos, setCompiledRepos] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem("arip_compiled_repos");
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
   const [activeTab, setActiveTab] = useState<string>("ccc");
   const [loading, setLoading] = useState(true);
   const [isInfoOpen, setIsInfoOpen] = useState(false);
 
-  // Load repositories summary
+  // Persist compiled repos to localStorage when modified
   useEffect(() => {
-    fetch("/api/repositories")
-      .then((res) => res.json())
+    try {
+      localStorage.setItem("arip_compiled_repos", JSON.stringify(compiledRepos));
+    } catch (err) {
+      console.error("Failed to save compiled repos to localStorage:", err);
+    }
+  }, [compiledRepos]);
+
+  // Load repositories summary
+  const loadRepositories = () => {
+    fetch("/api/session/bootstrap")
+      .then((res) => {
+        if (!res.ok) throw new Error("Bootstrap failed");
+        return res.json();
+      })
+      .then((session) => {
+        const token = session.token || "arip-secure-session-token-2026";
+        sessionStorage.setItem("arip_api_token", token);
+        return fetch("/api/repositories", {
+          headers: { "x-api-token": token }
+        });
+      })
+      .then((res) => {
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        return res.json();
+      })
       .then((data) => {
-        setRepositories(data);
-        if (data.length > 0) {
-          setSelectedRepoId(data[0].id);
+        if (Array.isArray(data)) {
+          let merged = [...data];
+          
+          // Merge dynamic custom repos from localStorage
+          try {
+            const savedCustom = localStorage.getItem("arip_custom_repos");
+            if (savedCustom) {
+              const customRepos = JSON.parse(savedCustom);
+              if (Array.isArray(customRepos)) {
+                customRepos.forEach((cr: any) => {
+                  if (!merged.some(r => r.id === cr.id)) {
+                    merged.push({
+                      id: cr.id,
+                      name: cr.name,
+                      description: cr.description,
+                      language: cr.language,
+                      fileCount: cr.filesCount || 4,
+                      symbolCount: Math.floor((cr.filesCount || 4) * 2.5),
+                      securityScore: 1.5,
+                      technicalDebt: 10,
+                      techDebtRating: "A"
+                    });
+                  }
+                });
+              }
+            }
+          } catch (e) {
+            console.error("Error parsing custom repos:", e);
+          }
+
+          // Filter by enabled repositories list (GitHub permission settings)
+          try {
+            const savedEnabled = localStorage.getItem("arip_enabled_repos");
+            if (savedEnabled) {
+              const enabledIds = JSON.parse(savedEnabled);
+              if (Array.isArray(enabledIds)) {
+                merged = merged.filter(r => enabledIds.includes(r.id));
+              }
+            }
+          } catch (e) {
+            console.error("Error parsing enabled repos:", e);
+          }
+
+          setRepositories(merged);
+          
+          if (merged.length > 0) {
+            setSelectedRepoId((curr) => {
+              if (curr && merged.some(r => r.id === curr)) return curr;
+              return merged[0].id;
+            });
+          } else {
+            setSelectedRepoId(null);
+          }
+        } else {
+          console.error("Invalid repositories data response format:", data);
+          setRepositories([]);
         }
         setLoading(false);
       })
       .catch((err) => {
         console.error("Failed to fetch repositories:", err);
+        setRepositories([]);
         setLoading(false);
       });
+  };
+
+  useEffect(() => {
+    loadRepositories();
+
+    // Dynamically re-filter/synchronize repositories list when localStorage updates from SettingsPanel
+    const handleStorageChange = () => {
+      loadRepositories();
+    };
+
+    window.addEventListener("storage", handleStorageChange);
+    return () => {
+      window.removeEventListener("storage", handleStorageChange);
+    };
   }, []);
 
   // Load detailed repo data when selector changes
   useEffect(() => {
     if (selectedRepoId) {
       setLoading(true);
-      fetch(`/api/repositories/${selectedRepoId}`)
-        .then((res) => res.json())
-        .then((data) => {
-          setActiveRepo(data);
-          setLoading(false);
+      const token = sessionStorage.getItem("arip_api_token") || "arip-secure-session-token-2026";
+      
+      // Load custom repository mock structure client-side if selected
+      const savedCustom = localStorage.getItem("arip_custom_repos");
+      let customRepoDetails = null;
+      if (savedCustom) {
+        try {
+          const list = JSON.parse(savedCustom);
+          const found = list.find((cr: any) => cr.id === selectedRepoId);
+          if (found) {
+            customRepoDetails = {
+              id: found.id,
+              name: found.name,
+              description: found.description,
+              language: found.language,
+              files: Array.from({ length: found.filesCount }, (_, i) => `src/File${i + 1}.ts`),
+              fileContents: Array.from({ length: found.filesCount }).reduce((acc: any, _, i) => {
+                acc[`src/File${i + 1}.ts`] = `// Synchronized GitHub workspace: ${found.name}\nexport function main() {\n  console.log("AST verification check complete!");\n}`;
+                return acc;
+              }, {}),
+              symbols: Array.from({ length: Math.floor(found.filesCount * 2.5) }).map((_, i) => ({
+                name: `verifyModule${i + 1}`,
+                type: "function",
+                file: `src/File${Math.floor(i / 2.5) + 1}.ts`,
+                line: i * 5 + 2,
+                description: `Exported entrypoint helper for ${found.name}`
+              })),
+              dependencies: {},
+              architectureRules: ["RULE-01: Custom repo must comply with local static verification rules."],
+              staticAnalysis: [],
+              observabilityCoverage: { logging: 90, metrics: 80, tracing: 75, gaps: [] },
+              securityRisk: { score: 1.5, threats: [] },
+              technicalDebt: { score: 10, rating: "A", smells: [] }
+            };
+          }
+        } catch (e) {
+          console.error(e);
+        }
+      }
+
+      if (customRepoDetails) {
+        setActiveRepo(customRepoDetails);
+        setLoading(false);
+      } else {
+        fetch(`/api/repositories/${selectedRepoId}`, {
+          headers: { "x-api-token": token }
         })
-        .catch((err) => {
-          console.error("Failed to fetch repository details:", err);
-          setLoading(false);
-        });
+          .then((res) => {
+            if (!res.ok) throw new Error("HTTP " + res.status);
+            return res.json();
+          })
+          .then((data) => {
+            setActiveRepo(data);
+            setLoading(false);
+          })
+          .catch((err) => {
+            console.error("Failed to fetch repository details:", err);
+            setLoading(false);
+          });
+      }
+    } else {
+      setActiveRepo(null);
     }
   }, [selectedRepoId]);
 
@@ -149,7 +301,7 @@ export default function App() {
               <button
                 id="tab-ccc"
                 onClick={() => setActiveTab("ccc")}
-                className={`px-4 py-3.5 text-xs font-mono font-bold transition-all duration-150 cursor-pointer flex items-center gap-1.5 border-b-2 ${
+                className={`relative group px-4 py-3.5 text-xs font-mono font-bold transition-all duration-150 cursor-pointer flex items-center gap-1.5 border-b-2 ${
                   activeTab === "ccc"
                     ? "border-slate-900 text-slate-900"
                     : "border-transparent text-slate-500 hover:text-slate-900"
@@ -157,12 +309,16 @@ export default function App() {
               >
                 <Cpu className="w-3.5 h-3.5" />
                 CCC Compiler
+                <div className="absolute hidden group-hover:block bottom-full mb-2 left-1/2 transform -translate-x-1/2 bg-slate-900 text-slate-100 font-mono text-[10px] px-2.5 py-1.5 rounded border border-slate-950 shadow-md whitespace-normal w-56 text-center z-50 pointer-events-none tracking-wide normal-case leading-relaxed font-normal">
+                  <div className="font-bold text-rose-400 mb-0.5 uppercase text-[9px] tracking-wider">module info</div>
+                  Analyzes and compiles codebase facts into deterministic AST structures.
+                </div>
               </button>
 
               <button
                 id="tab-architect"
                 onClick={() => setActiveTab("architect")}
-                className={`px-4 py-3.5 text-xs font-mono font-bold transition-all duration-150 cursor-pointer flex items-center gap-1.5 border-b-2 ${
+                className={`relative group px-4 py-3.5 text-xs font-mono font-bold transition-all duration-150 cursor-pointer flex items-center gap-1.5 border-b-2 ${
                   activeTab === "architect"
                     ? "border-slate-900 text-slate-900"
                     : "border-transparent text-slate-500 hover:text-slate-900"
@@ -170,12 +326,16 @@ export default function App() {
               >
                 <Layers className="w-3.5 h-3.5" />
                 Architect Agent
+                <div className="absolute hidden group-hover:block bottom-full mb-2 left-1/2 transform -translate-x-1/2 bg-slate-900 text-slate-100 font-mono text-[10px] px-2.5 py-1.5 rounded border border-slate-950 shadow-md whitespace-normal w-56 text-center z-50 pointer-events-none tracking-wide normal-case leading-relaxed font-normal">
+                  <div className="font-bold text-rose-400 mb-0.5 uppercase text-[9px] tracking-wider">module info</div>
+                  Formulates high-level system boundaries and clean refactoring plans.
+                </div>
               </button>
 
               <button
                 id="tab-scanner"
                 onClick={() => setActiveTab("scanner")}
-                className={`px-4 py-3.5 text-xs font-mono font-bold transition-all duration-150 cursor-pointer flex items-center gap-1.5 border-b-2 ${
+                className={`relative group px-4 py-3.5 text-xs font-mono font-bold transition-all duration-150 cursor-pointer flex items-center gap-1.5 border-b-2 ${
                   activeTab === "scanner"
                     ? "border-slate-900 text-slate-900"
                     : "border-transparent text-slate-500 hover:text-slate-900"
@@ -183,12 +343,16 @@ export default function App() {
               >
                 <GitBranch className="w-3.5 h-3.5" />
                 Scanner
+                <div className="absolute hidden group-hover:block bottom-full mb-2 left-1/2 transform -translate-x-1/2 bg-slate-900 text-slate-100 font-mono text-[10px] px-2.5 py-1.5 rounded border border-slate-950 shadow-md whitespace-normal w-56 text-center z-50 pointer-events-none tracking-wide normal-case leading-relaxed font-normal">
+                  <div className="font-bold text-rose-400 mb-0.5 uppercase text-[9px] tracking-wider">module info</div>
+                  Extracts real-time workspace code files, symbol lists, and code metrics.
+                </div>
               </button>
 
               <button
                 id="tab-router"
                 onClick={() => setActiveTab("router")}
-                className={`px-4 py-3.5 text-xs font-mono font-bold transition-all duration-150 cursor-pointer flex items-center gap-1.5 border-b-2 ${
+                className={`relative group px-4 py-3.5 text-xs font-mono font-bold transition-all duration-150 cursor-pointer flex items-center gap-1.5 border-b-2 ${
                   activeTab === "router"
                     ? "border-slate-900 text-slate-900"
                     : "border-transparent text-slate-500 hover:text-slate-900"
@@ -196,12 +360,16 @@ export default function App() {
               >
                 <Shuffle className="w-3.5 h-3.5" />
                 Model Router
+                <div className="absolute hidden group-hover:block bottom-full mb-2 left-1/2 transform -translate-x-1/2 bg-slate-900 text-slate-100 font-mono text-[10px] px-2.5 py-1.5 rounded border border-slate-950 shadow-md whitespace-normal w-56 text-center z-50 pointer-events-none tracking-wide normal-case leading-relaxed font-normal">
+                  <div className="font-bold text-rose-400 mb-0.5 uppercase text-[9px] tracking-wider">module info</div>
+                  Directs prompts to customized, cost-effective, and low-latency model tiers.
+                </div>
               </button>
 
               <button
                 id="tab-embeddings"
                 onClick={() => setActiveTab("embeddings")}
-                className={`px-4 py-3.5 text-xs font-mono font-bold transition-all duration-150 cursor-pointer flex items-center gap-1.5 border-b-2 ${
+                className={`relative group px-4 py-3.5 text-xs font-mono font-bold transition-all duration-150 cursor-pointer flex items-center gap-1.5 border-b-2 ${
                   activeTab === "embeddings"
                     ? "border-slate-900 text-slate-900"
                     : "border-transparent text-slate-500 hover:text-slate-900"
@@ -209,13 +377,17 @@ export default function App() {
               >
                 <Database className="w-3.5 h-3.5" />
                 Embedding Layer
+                <div className="absolute hidden group-hover:block bottom-full mb-2 left-1/2 transform -translate-x-1/2 bg-slate-900 text-slate-100 font-mono text-[10px] px-2.5 py-1.5 rounded border border-slate-950 shadow-md whitespace-normal w-56 text-center z-50 pointer-events-none tracking-wide normal-case leading-relaxed font-normal">
+                  <div className="font-bold text-rose-400 mb-0.5 uppercase text-[9px] tracking-wider">module info</div>
+                  Visualizes code semantic clusters and similarity rankings in multi-dimensional space.
+                </div>
               </button>
 
               <button
                 id="tab-chat"
                 disabled={!isCurrentRepoCompiled}
                 onClick={() => setActiveTab("chat")}
-                className={`px-4 py-3.5 text-xs font-mono font-bold transition-all duration-150 cursor-pointer flex items-center gap-1.5 border-b-2 disabled:opacity-30 disabled:cursor-not-allowed ${
+                className={`relative group px-4 py-3.5 text-xs font-mono font-bold transition-all duration-150 cursor-pointer flex items-center gap-1.5 border-b-2 disabled:opacity-30 disabled:cursor-not-allowed ${
                   activeTab === "chat"
                     ? "border-slate-900 text-slate-900"
                     : "border-transparent text-slate-500 hover:text-slate-900"
@@ -223,13 +395,17 @@ export default function App() {
               >
                 <Brain className="w-3.5 h-3.5" />
                 Professor
+                <div className="absolute hidden group-hover:block bottom-full mb-2 left-1/2 transform -translate-x-1/2 bg-slate-900 text-slate-100 font-mono text-[10px] px-2.5 py-1.5 rounded border border-slate-950 shadow-md whitespace-normal w-56 text-center z-50 pointer-events-none tracking-wide normal-case leading-relaxed font-normal">
+                  <div className="font-bold text-rose-400 mb-0.5 uppercase text-[9px] tracking-wider">module info</div>
+                  Grounds interactive model conversations on compiled code symbols and contexts.
+                </div>
               </button>
 
               <button
                 id="tab-agents"
                 disabled={!isCurrentRepoCompiled}
                 onClick={() => setActiveTab("agents")}
-                className={`px-4 py-3.5 text-xs font-mono font-bold transition-all duration-150 cursor-pointer flex items-center gap-1.5 border-b-2 disabled:opacity-30 disabled:cursor-not-allowed ${
+                className={`relative group px-4 py-3.5 text-xs font-mono font-bold transition-all duration-150 cursor-pointer flex items-center gap-1.5 border-b-2 disabled:opacity-30 disabled:cursor-not-allowed ${
                   activeTab === "agents"
                     ? "border-slate-900 text-slate-900"
                     : "border-transparent text-slate-500 hover:text-slate-900"
@@ -237,13 +413,17 @@ export default function App() {
               >
                 <Layers className="w-3.5 h-3.5" />
                 Swarm
+                <div className="absolute hidden group-hover:block bottom-full mb-2 left-1/2 transform -translate-x-1/2 bg-slate-900 text-slate-100 font-mono text-[10px] px-2.5 py-1.5 rounded border border-slate-950 shadow-md whitespace-normal w-56 text-center z-50 pointer-events-none tracking-wide normal-case leading-relaxed font-normal">
+                  <div className="font-bold text-rose-400 mb-0.5 uppercase text-[9px] tracking-wider">module info</div>
+                  Executes parallel audits, risk analysis swarms, and architecture recommendations.
+                </div>
               </button>
 
               <button
                 id="tab-impact"
                 disabled={!isCurrentRepoCompiled}
                 onClick={() => setActiveTab("impact")}
-                className={`px-4 py-3.5 text-xs font-mono font-bold transition-all duration-150 cursor-pointer flex items-center gap-1.5 border-b-2 disabled:opacity-30 disabled:cursor-not-allowed ${
+                className={`relative group px-4 py-3.5 text-xs font-mono font-bold transition-all duration-150 cursor-pointer flex items-center gap-1.5 border-b-2 disabled:opacity-30 disabled:cursor-not-allowed ${
                   activeTab === "impact"
                     ? "border-slate-900 text-slate-900"
                     : "border-transparent text-slate-500 hover:text-slate-900"
@@ -251,13 +431,17 @@ export default function App() {
               >
                 <BarChart3 className="w-3.5 h-3.5" />
                 Causality
+                <div className="absolute hidden group-hover:block bottom-full mb-2 left-1/2 transform -translate-x-1/2 bg-slate-900 text-slate-100 font-mono text-[10px] px-2.5 py-1.5 rounded border border-slate-950 shadow-md whitespace-normal w-56 text-center z-50 pointer-events-none tracking-wide normal-case leading-relaxed font-normal">
+                  <div className="font-bold text-rose-400 mb-0.5 uppercase text-[9px] tracking-wider">module info</div>
+                  Traces forward and backward dependency impact paths across components.
+                </div>
               </button>
 
               <button
                 id="tab-governance"
                 disabled={!isCurrentRepoCompiled}
                 onClick={() => setActiveTab("governance")}
-                className={`px-4 py-3.5 text-xs font-mono font-bold transition-all duration-150 cursor-pointer flex items-center gap-1.5 border-b-2 disabled:opacity-30 disabled:cursor-not-allowed ${
+                className={`relative group px-4 py-3.5 text-xs font-mono font-bold transition-all duration-150 cursor-pointer flex items-center gap-1.5 border-b-2 disabled:opacity-30 disabled:cursor-not-allowed ${
                   activeTab === "governance"
                     ? "border-slate-900 text-slate-900"
                     : "border-transparent text-slate-500 hover:text-slate-900"
@@ -265,12 +449,16 @@ export default function App() {
               >
                 <ShieldCheck className="w-3.5 h-3.5" />
                 Governance
+                <div className="absolute hidden group-hover:block bottom-full mb-2 left-1/2 transform -translate-x-1/2 bg-slate-900 text-slate-100 font-mono text-[10px] px-2.5 py-1.5 rounded border border-slate-950 shadow-md whitespace-normal w-56 text-center z-50 pointer-events-none tracking-wide normal-case leading-relaxed font-normal">
+                  <div className="font-bold text-rose-400 mb-0.5 uppercase text-[9px] tracking-wider">module info</div>
+                  Evaluates static test analysis, compliance reports, and tech debt scores.
+                </div>
               </button>
 
               <button
                 id="tab-cli"
                 onClick={() => setActiveTab("cli")}
-                className={`px-4 py-3.5 text-xs font-mono font-bold transition-all duration-150 cursor-pointer flex items-center gap-1.5 border-b-2 ${
+                className={`relative group px-4 py-3.5 text-xs font-mono font-bold transition-all duration-150 cursor-pointer flex items-center gap-1.5 border-b-2 ${
                   activeTab === "cli"
                     ? "border-slate-900 text-slate-900"
                     : "border-transparent text-slate-500 hover:text-slate-900"
@@ -278,6 +466,27 @@ export default function App() {
               >
                 <Terminal className="w-3.5 h-3.5" />
                 Console
+                <div className="absolute hidden group-hover:block bottom-full mb-2 left-1/2 transform -translate-x-1/2 bg-slate-900 text-slate-100 font-mono text-[10px] px-2.5 py-1.5 rounded border border-slate-950 shadow-md whitespace-normal w-56 text-center z-50 pointer-events-none tracking-wide normal-case leading-relaxed font-normal">
+                  <div className="font-bold text-rose-400 mb-0.5 uppercase text-[9px] tracking-wider">module info</div>
+                  Runs workspace terminal utilities, AST logs, and sandbox script runs.
+                </div>
+              </button>
+
+              <button
+                id="tab-settings"
+                onClick={() => setActiveTab("settings")}
+                className={`relative group px-4 py-3.5 text-xs font-mono font-bold transition-all duration-150 cursor-pointer flex items-center gap-1.5 border-b-2 ${
+                  activeTab === "settings"
+                    ? "border-slate-900 text-slate-900"
+                    : "border-transparent text-slate-500 hover:text-slate-900"
+                }`}
+              >
+                <Settings className="w-3.5 h-3.5" />
+                Settings
+                <div className="absolute hidden group-hover:block bottom-full mb-2 left-1/2 transform -translate-x-1/2 bg-slate-900 text-slate-100 font-mono text-[10px] px-2.5 py-1.5 rounded border border-slate-950 shadow-md whitespace-normal w-56 text-center z-50 pointer-events-none tracking-wide normal-case leading-relaxed font-normal font-sans">
+                  <div className="font-bold text-rose-400 mb-0.5 uppercase text-[9px] tracking-wider">module info</div>
+                  Configure secure credentials for Groq, OpenRouter, and GitHub repositories.
+                </div>
               </button>
             </div>
 
@@ -288,7 +497,8 @@ export default function App() {
             activeTab !== "scanner" &&
             activeTab !== "router" &&
             activeTab !== "embeddings" &&
-            activeTab !== "architect" ? (
+            activeTab !== "architect" &&
+            activeTab !== "settings" ? (
               <div className="p-8 text-center space-y-4 max-w-md mx-auto my-12">
                 <AlertCircle className="w-10 h-10 text-amber-600 mx-auto" />
                 <div className="space-y-1">
@@ -355,6 +565,10 @@ export default function App() {
                     isCompiled={isCurrentRepoCompiled}
                     onCompiled={handleOnCompiled}
                   />
+                )}
+
+                {activeTab === "settings" && (
+                  <SettingsPanel />
                 )}
               </div>
             )}

@@ -164,9 +164,13 @@ export default function TerminalEmulator({ repo, isCompiled, onCompiled }: Props
       setHistory(prev => [...prev, "[CCC QUERY] Connecting with Repository Professor...", ""]);
 
       try {
+        const token = sessionStorage.getItem("arip_api_token") || "arip-secure-session-token-2026";
         const res = await fetch("/api/ask", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { 
+            "Content-Type": "application/json",
+            "x-api-token": token
+          },
           body: JSON.stringify({ question: queryText, repoId: repo.id })
         });
 

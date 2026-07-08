@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { MockRepository, StaticAnalysisWarning } from "../../server/mockRepositories";
 import { ShieldCheck, Flame, CheckSquare, AlertTriangle } from "lucide-react";
 
@@ -7,6 +7,8 @@ interface Props {
 }
 
 export default function SystemGovernance({ repo }: Props) {
+  const [selectedWarnIndex, setSelectedWarnIndex] = useState<number | null>(null);
+
   // Compute standard scores from repository variables
   const integrityScore = Math.max(20, 100 - repo.technicalDebt.score - (repo.securityRisk.score * 4));
   const securityScore = Math.round(100 - (repo.securityRisk.score * 10));
@@ -123,26 +125,76 @@ export default function SystemGovernance({ repo }: Props) {
             </p>
           </div>
 
-          <div className="space-y-2.5 max-h-[380px] overflow-y-auto pr-1">
-            {repo.staticAnalysis.map((warn, i) => (
-              <div key={i} className="p-3.5 bg-[#fcfbfa] border border-slate-200 rounded-lg text-xs space-y-1.5 font-mono">
-                <div className="flex justify-between items-center text-[10px]">
-                  <span className="text-rose-700 font-bold uppercase tracking-wider flex items-center gap-1">
-                    <AlertTriangle className="w-3.5 h-3.5" />
-                    High risk
-                  </span>
-                  <span className="bg-slate-100 border border-slate-200 px-1.5 py-0.2 rounded font-bold text-slate-700 uppercase">
-                    {warn.tool}
-                  </span>
+          <div className="space-y-2.5 max-h-[480px] overflow-y-auto pr-1">
+            {repo.staticAnalysis.map((warn, i) => {
+              const isSelected = selectedWarnIndex === i;
+              const fileCode = repo.fileContents[warn.file];
+
+              return (
+                <div 
+                  key={i} 
+                  className={`p-3.5 border rounded-lg text-xs space-y-1.5 font-mono transition-all duration-150 cursor-pointer ${
+                    isSelected 
+                      ? "bg-slate-900 border-slate-950 text-white shadow-md ring-1 ring-slate-800" 
+                      : "bg-[#fcfbfa] border-slate-200 hover:border-slate-350 hover:bg-white"
+                  }`}
+                  onClick={() => setSelectedWarnIndex(isSelected ? null : i)}
+                >
+                  <div className="flex justify-between items-center text-[10px]">
+                    <span className={`${isSelected ? "text-rose-400" : "text-rose-700"} font-bold uppercase tracking-wider flex items-center gap-1`}>
+                      <AlertTriangle className="w-3.5 h-3.5" />
+                      {warn.severity.toUpperCase()} RISK
+                    </span>
+                    <span className={`px-1.5 py-0.2 rounded font-bold uppercase border ${
+                      isSelected 
+                        ? "bg-slate-800 border-slate-700 text-slate-300" 
+                        : "bg-slate-100 border-slate-200 text-slate-700"
+                    }`}>
+                      {warn.tool}
+                    </span>
+                  </div>
+                  <div className={`font-sans font-semibold leading-relaxed ${isSelected ? "text-slate-100" : "text-slate-800"}`}>
+                    {warn.message}
+                  </div>
+                  <div className={`text-[10px] font-mono flex items-center justify-between ${isSelected ? "text-slate-400" : "text-slate-500"}`}>
+                    <span>File: {warn.file} | Line {warn.line}</span>
+                    <span className="text-[9px] underline opacity-70">
+                      {isSelected ? "Click to collapse" : "Click to view code"}
+                    </span>
+                  </div>
+
+                  {/* Expanded Code-Snippet Visualizer */}
+                  {isSelected && fileCode && (
+                    <div 
+                      onClick={(e) => e.stopPropagation()}
+                      className="mt-3 bg-slate-950 border border-slate-800 rounded p-3 font-mono text-[10px] overflow-x-auto max-h-[220px] space-y-1 text-slate-300 shadow-inner"
+                    >
+                      <div className="flex justify-between items-center text-[9px] text-slate-500 border-b border-slate-800 pb-1.5 mb-2 select-none">
+                        <span>SOURCE CODE SNIPPET</span>
+                        <span>{warn.file}</span>
+                      </div>
+                      {fileCode.split("\n").map((line, idx) => {
+                        const lineNum = idx + 1;
+                        const isTargetLine = lineNum === warn.line;
+                        return (
+                          <div 
+                            key={idx} 
+                            className={`flex gap-3 px-1.5 py-0.5 rounded ${
+                              isTargetLine 
+                                ? "bg-rose-950/70 text-rose-200 border-l-2 border-rose-500 font-bold" 
+                                : "hover:bg-slate-900/40"
+                            }`}
+                          >
+                            <span className="w-6 text-slate-600 text-right select-none">{lineNum}</span>
+                            <span className="whitespace-pre">{line}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
-                <div className="text-slate-800 font-sans font-semibold leading-relaxed">
-                  {warn.message}
-                </div>
-                <div className="text-[10px] text-slate-500 font-mono">
-                  File: {warn.file} | Line {warn.line}
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       </div>
