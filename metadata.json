@@ -1,0 +1,6 @@
+{
+  "name": "AI Repository Intelligence Platform",
+  "description": "An interactive workspace for the Code Context Compiler (CCC) and Multi-Agent system to analyze, visualize, and reason about software repositories.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
