@@ -19,11 +19,15 @@ export default function InfoModal({ isOpen, onClose }: Props) {
     },
     {
       q: "How does the AI model router evaluate which tier to trigger?",
-      a: "Our router scores incoming prompts based on estimated token size, requested action (e.g. syntax fixes vs system review), and target graph complexity. Routine checks are sent to lightning-fast Groq nodes, while high-value reasoning requests route to premium Claude or Gemini models."
+      a: "Our router scores incoming prompts based on estimated token size, requested action, and target graph complexity. It dynamically routes simple checks to lightning-fast Groq fast inference API nodes and premium requests to OpenRouter gateways, based on your custom-mapped model preferences."
     },
     {
-      q: "Is there real-time bidirectional sync with GitHub?",
-      a: "Yes. The Repository Scanner supports receiving standard Git push webhook payloads. Upon receipt, it initiates a fast workspace clone, detects file changes, and updates the AST symbol structures in the embedding databases."
+      q: "Where are my private API keys and settings saved?",
+      a: "All keys for Groq, OpenRouter, and GitHub are stored securely client-side in your local browser state (HTML5 LocalStorage). They never leave your device or get committed to backend log files, ensuring strict credential privacy."
+    },
+    {
+      q: "How do I migrate these simulated workspaces to a production environment?",
+      a: "To transition from simulated states (like mock repository lists or regex code scanner) into real enterprise systems, check out our production migration roadmap outlined in the root TODO.md. This covers setting up GitHub OAuth servers, tree-sitter AST scanning, and pgvector relational embeddings."
     },
     {
       q: "What is a blast risk factor or change propagation?",

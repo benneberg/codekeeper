@@ -32,11 +32,19 @@ The application will boot up on port 3000. Access the dashboard in your browser 
 1. **Workspace Selector**: Choose a target repository (e.g. IoT Gateway, SaaS Auth, Billing).
 2. **Compile AST Context**: Navigate to the **CCC Compiler** or **Console** tab and execute the compiler. This unlocks the downstream reasoning panels.
 3. **Review Metrics**: Check the **Architect Agent**, **Causality**, and **Governance** tabs for modularity index ratings, circular loop warnings, and change impact blast radiuses.
-4. **Consult Professor**: Engage the fact-grounded chat assistant to receive targeted refactoring prescriptions citing precise line-number evidence.
+4. **Configure Settings & Keys**: Go to the **Settings** tab. Securely input and save API keys for **Groq fast inference API**, **OpenRouter**, and **GitHub** locally inside browser state.
+5. **Map Model Routing Tiers**: Customize provider and model preferences (such as LLaMA-3, Gemini Flash, Claude Sonnet) inside the **Model Router** and test prompt complexity matching.
+6. **Manage GitHub Workspaces**: Toggle permissions for loaded repositories or register new GitHub repositories to instantly synchronize with the workspace selector.
+7. **Consult Professor**: Engage the fact-grounded chat assistant to receive targeted refactoring prescriptions citing precise line-number evidence.
 
 ---
 
-## 4. Testing
+## 4. Settings & Credentials Privacy
+All configuration keys, credentials, and custom workspaces are saved **locally inside the client's browser context** (HTML5 LocalStorage). No private credentials or third-party keys are ever committed to logs or shared backends.
+
+---
+
+## 5. Testing
 - Static code formatting and syntax checks are managed via TypeScript type compilation:
   ```bash
   npm run lint
@@ -45,10 +53,11 @@ The application will boot up on port 3000. Access the dashboard in your browser 
 
 ---
 
-## 5. Build & Deployment
+## 6. Build & Deployment
 The build process packages both frontend single-page assets and server entry points:
 
 ### Production Compilation:
+```bash
 ```bash
 npm run build
 ```
@@ -62,3 +71,8 @@ To boot the production full-stack server container:
 npm start
 ```
 The standalone server binds to host `0.0.0.0` on port `3000`.
+
+---
+
+## 7. Production Migration & Future Roadmap
+For detailed architectural blueprints on migrating simulated components (like OAuth integrations, Tree-Sitter compiler scopes, server-side credential proxies, and Pgvector vector embedding layers) to enterprise-ready cloud systems, see the `TODO.md` file.
