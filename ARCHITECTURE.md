@@ -1,57 +1,164 @@
-# System Architecture Specification
+schema:
+  version: 1
+  compatible_with:
+    - CCC
+  generated_by: Repository Bootstrap Prompt
+  generated_at: 2026-07-10T02:46:00-07:00
+  repository: AI Repository Intelligence Platform
 
-## 1. Components
-The system is structured as a full-stack, single-container web application:
-- **Client Application (Vite + React 19)**: Built with functional React components,styled with Tailwind CSS v4, and animated using `motion`. It includes interactive sub-components matching individual analytical tabs.
-- **Server API Router (Node.js + Express 4)**: Serves static compiled client assets from the `/dist` directory in production, provides REST API endpoints, and hosts a proxy to the Google Gemini API.
-- **Symbolic Mock Engine (`/server/mockRepositories.ts`)**: Supplies realistic, deep structural facts including AST symbol lists, directed dependency edges, static analysis vulnerabilities, and debt scoring matrices.
+architecture_style:
+  value: Full-Stack Single-Container Service Architecture
+  evidence_state: OBSERVED
+  confidence: HIGH
+  evidence:
+    - package.json defines unified scripts
+    - server.ts mounts express.static serving dist/ folder
+  notes: "Unified development and deployment setup where Node.js hosts API endpoints and serves frontend client bundles."
 
-*Confidence: High*
+major_components:
+  value:
+    - Client UI Cockpit: SPA client utilizing modular components corresponding to analytical dashboards (Professor Chat, Embedded Space, Compiler, Systems, Settings).
+    - API Proxy Router (server.ts): Express gateway exposing API endpoints, proxying remote requests, and loading relative filesystem states.
+    - TypeScript Compiler AST Parsing Engine (localScanner.ts): Official Compiler API processor analyzing local TS/TSX constructs structurally.
+    - Mock Codebase Metrics Registry (mockRepositories.ts): Pre-loaded software telemetry schemas for simulation sandboxing.
+  evidence_state: OBSERVED
+  confidence: HIGH
+  evidence:
+    - src/components/ directory listing
+    - server/ directory files
+  notes: ""
 
-## 2. Data Flow & Source of Truth
-- **Source of Truth**: The active database and mock repository structures inside `/server/mockRepositories.ts` act as the primary structural data truth.
-- **Flow Scenario (User Consults Professor Chat)**:
-  1. The client selects a repository workspace, prompting the `App` component to pull detailed characteristics from `/api/repositories/:id`.
-  2. The user inputs a query in the `ProfessorChat` tab.
-  3. The client issues a POST request to `/api/ask` containing the question and repo context.
-  4. The Express server retrieves the workspace's files, symbols, dependency arrays, and warning files from the mock engine.
-  5. The server joins this structural context into a highly restrictive system instruction block.
-  6. If a `GEMINI_API_KEY` is present, the server invokes the unified Google GenAI client (`@google/genai`); otherwise, it resolves the request using a rule-based deterministic response simulation.
-  7. The response flows back to the client and renders inside the chat interface using markdown parsing.
+responsibilities:
+  value:
+    - Client UI: Collects custom user configuration, inputs, and renders semantic graphs, dependency DAGs, and interactive metrics.
+    - Express Backend: Authenticates requests via session tokens, serves local code assets, parses local workspace abstract syntax trees, and proxies prompt payloads to external model interfaces.
+    - localScanner.ts: Translates flat files into structured token maps (classes, interfaces, dependency vectors) for downstream LLM grounding.
+  evidence_state: OBSERVED
+  confidence: HIGH
+  evidence:
+    - App.tsx navigation and state handlers
+    - server.ts API controllers
+  notes: ""
 
-*Confidence: High*
+dependency_flow:
+  value:
+    - Client SPA makes direct HTTP API requests to server.ts endpoints using custom fetch hooks.
+    - server.ts calls localScanner.ts and mockRepositories.ts internally to assemble workspace telemetry.
+    - server.ts resolves model grounding prompts using either standard Google GenAI SDK or custom header keys to external providers (Groq / OpenRouter).
+  evidence_state: OBSERVED
+  confidence: HIGH
+  evidence:
+    - server.ts imports localScanner
+    - ProfessorChat.tsx initiates API requests to /api/ask
+  notes: ""
 
-## 3. Integrations
-- **Google GenAI SDK (`@google/genai` v2.4.0)**: Used server-side to call the `gemini-3.5-flash` model with system instructions, user prompts, and conversation history.
-- **Tailwind CSS v4 & Lucide Icons**: Extensively integrated for UI presentation and consistent vector symbol designs.
+data_flow:
+  value:
+    - Query Flow: User inputs question inside Professor Chat -> Request sent to /api/ask with context parameters -> Backend determines complexity -> If custom header keys (Groq, OpenRouter) are present, request routes to external completions API, otherwise queries server-side Gemini -> Grounded answer returned to client.
+    - Sync Flow: User inserts GitHub PAT token in Settings -> Request sent to /api/github/sync -> Backend queries api.github.com -> Returns live repo definitions -> React state merges them and saves list to client LocalStorage.
+    - Search Flow: User triggers query in Embeddings tab -> POST sent to /api/embeddings/search -> Backend requests Gemini embedContent vector -> Computes cosine similarity against cache -> Returns sorted matches.
+  evidence_state: OBSERVED
+  confidence: HIGH
+  evidence:
+    - server.ts API implementations
+    - SettingsPanel.tsx, EmbeddingLayer.tsx, ProfessorChat.tsx fetch calls
+  notes: ""
 
-*Confidence: High*
+source_of_truth:
+  value:
+    - Codebase Structure: The active workspace directory (read via relative fs paths) is the source of truth for AST scanner telemetry.
+    - User Settings: HTML5 LocalStorage in the browser context stores credentials and selected repository preferences.
+  evidence_state: OBSERVED
+  confidence: HIGH
+  evidence:
+    - localScanner.ts reads relative directories
+    - localStorage hooks in SettingsPanel.tsx
+  notes: ""
 
-## 4. Deployment Model
-- **Platform**: Cloud Run / Containerized Environments.
-- **Server Binding**: The Node.js Express server binds to host `0.0.0.0` on port `3000`, matching container proxy requirements.
-- **Production Pipeline**:
-  - `npm run build` triggers a two-part compile process: `vite build` translates React files to static bundles inside `/dist`, and `esbuild` compiles `server.ts` into `/dist/server.cjs` (bundling TypeScript and resolving local files).
-  - `npm start` executes `node dist/server.cjs` in standalone container mode.
+entry_points:
+  value:
+    - Frontend: src/main.tsx (Vite root entry point loading React DOM)
+    - Backend: server.ts (Express entry point loading static SPA directories)
+  evidence_state: OBSERVED
+  confidence: HIGH
+  evidence:
+    - package.json dev, build, and start scripts
+    - vite.config.ts configuration
+  notes: ""
 
-*Confidence: High*
+external_systems:
+  value:
+    - GitHub REST API: Reached via https://api.github.com to query live repositories.
+    - Google Gemini Developer API: Reached via @google/genai SDK to generate grounded chat answers and token embeddings.
+    - Groq Inference API: Reached via https://api.groq.com/openai/v1/chat/completions for fast LLM inference.
+    - OpenRouter Gateway: Reached via https://openrouter.ai/api/v1/chat/completions for custom routed model endpoints.
+  evidence_state: OBSERVED
+  confidence: HIGH
+  evidence:
+    - server.ts custom proxy headers and API fetch paths
+  notes: ""
 
-## 5. Observability
-- **Current Setup**: Basic standard stream tracking via `console.log` on startup and API route invocations.
-- **Gaps**: Lacks request correlation identifiers, structured performance metrics (latency, credit consumption), or log levels.
+extension_points:
+  value:
+    - Addition of other custom language compilers inside localScanner.ts.
+    - Integration of durable cloud databases (e.g. Firestore / Cloud SQL) to replace local in-memory embeddings cache.
+  evidence_state: INFERRED
+  confidence: HIGH
+  evidence:
+    - TODO.md roadmap segments
+  notes: ""
 
-*Confidence: High*
+configuration:
+  value:
+    - Environmental Keys: process.env.GEMINI_API_KEY
+    - Client Keys: LocalStorage variables ('arip_groq_api_key', 'arip_openrouter_api_key', 'arip_github_token')
+    - System Ports: Port 3000 host 0.0.0.0
+  evidence_state: OBSERVED
+  confidence: HIGH
+  evidence:
+    - .env.example
+    - server.ts code
+  notes: ""
 
-## 6. Risks & Threat Vectors
-- **API Key Leakage Protection**: Handled perfectly by keeping the Gemini SDK key completely on the server-side, never rendering input fields or returning secrets to the client.
-- **Resource Starvation risk**: If large codebases are uploaded in the future, running Tree-Sitter parsers on single-threaded synchronous Express worker pools could block API request lines.
-- **Prompt Injection**: Unvalidated mock file structures are bundled directly into system instructions, which could allow maliciously written comments in source files to influence agent responses.
+constraints:
+  value:
+    - Port constraint: Single container, strictly bound to port 3000.
+    - Synchronous parsing constraint: Runs single-threaded synchronous directory checks.
+    - Client isolation: No central cloud SQL storage is present; all settings remain completely offline-first inside client's browser context.
+  evidence_state: OBSERVED
+  confidence: HIGH
+  evidence:
+    - localScanner.ts fs operations
+    - package.json script port binds
+  notes: ""
 
-*Confidence: Medium-High*
+architecture_risks:
+  value:
+    - Running recursive synchronous filesystem searches inside Express request queues can lock event loops under massive project directory states.
+    - Storing private API keys inside LocalStorage is secure from server-side databases, but vulnerable to XSS attacks if untrusted scripts are injected into client static files.
+  evidence_state: INFERRED
+  confidence: HIGH
+  evidence:
+    - fs.readFileSync use in localScanner.ts
+  notes: ""
 
-## 7. Recommended Architectural Improvements
-- **Worker Thread Pools**: Move future CPU-intensive AST parsing activities to background thread channels or asynchronous celery task queues.
-- **Request Schemas**: Integrate Zod or equivalent request validator libraries on the Express layer to guarantee schema correctness.
-- **Structured Loggers**: Migrate from standard console prints to custom logs (e.g. Pino or Winston) with request identifiers.
+improvement_opportunities:
+  value:
+    - Move file-scanning AST operations into dedicated background Worker Threads or async task cues.
+    - Replace mock repositories completely with physical directory targets inside a dynamic local workspace editor.
+    - Implement Zod validation schemas for all inbound backend API payloads to prevent shell escape attempts.
+  evidence_state: INFERRED
+  confidence: HIGH
+  evidence:
+    - server.ts is currently accepting unfiltered parameters
+  notes: ""
 
-*Confidence: High*
+unknown_areas:
+  value:
+    - System performance metrics when parsing code bases that exceed 10 million physical lines of code.
+    - Rate limiting tolerances of external model APIs under rapid multi-turn chat interaction bursts.
+  evidence_state: INFERRED
+  confidence: MEDIUM
+  evidence:
+    - No request rate limits are configured in server.ts
+  notes: ""
