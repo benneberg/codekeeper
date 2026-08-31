@@ -1,8 +1,17 @@
 # AI Repository Intelligence Platform (ARIP)
 
-ARIP is a full-stack repository intelligence and codebase reasoning platform. It pairs deterministic compiler analysis with multi-agent architectural reasoning to eliminate context hallucinations and provide verified codebase insights.
+> Repository bootstrap, audit, and intelligence platform. TypeScript Compiler AST analysis, dependency graph mapping, multi-gateway model routing, and cosine similarity vector search.
+
+[![CI](https://github.com/benneberg/codekeeper/actions/workflows/ci.yml/badge.svg)](https://github.com/benneberg/codekeeper/actions/workflows/ci.yml)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.8-blue.svg)](https://www.typescriptlang.org/)
+[![React](https://img.shields.io/badge/React-19.0-61DAFB.svg)](https://react.dev/)
+[![Tailwind CSS](https://img.shields.io/badge/Tailwind-v4-38B2AC.svg)](https://tailwindcss.com/)
+[![Vite](https://img.shields.io/badge/Vite-6.2-646CFF.svg)](https://vitejs.dev/)
+[![Node.js](https://img.shields.io/badge/Node.js-22.x-339933.svg)](https://nodejs.org/)
 
 ---
+
+ARIP is a full-stack repository intelligence and codebase reasoning platform. It pairs deterministic compiler analysis with multi-agent architectural reasoning to eliminate context hallucinations and provide verified codebase insights.
 
 ## Why ARIP Exists
 
