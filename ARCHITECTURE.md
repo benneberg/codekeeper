@@ -1,164 +1,164 @@
-schema:
-  version: 1
-  compatible_with:
-    - CCC
-  generated_by: Repository Bootstrap Prompt
-  generated_at: 2026-07-10T02:46:00-07:00
-  repository: AI Repository Intelligence Platform
+# System Architecture
 
-architecture_style:
-  value: Full-Stack Single-Container Service Architecture
-  evidence_state: OBSERVED
-  confidence: HIGH
-  evidence:
-    - package.json defines unified scripts
-    - server.ts mounts express.static serving dist/ folder
-  notes: "Unified development and deployment setup where Node.js hosts API endpoints and serves frontend client bundles."
+This document is the authoritative architectural specification for the AI Repository Intelligence Platform (ARIP). It describes the current implementation, component boundaries, data flow, state management, security boundaries, and architectural invariants.
 
-major_components:
-  value:
-    - Client UI Cockpit: SPA client utilizing modular components corresponding to analytical dashboards (Professor Chat, Embedded Space, Compiler, Systems, Settings).
-    - API Proxy Router (server.ts): Express gateway exposing API endpoints, proxying remote requests, and loading relative filesystem states.
-    - TypeScript Compiler AST Parsing Engine (localScanner.ts): Official Compiler API processor analyzing local TS/TSX constructs structurally.
-    - Mock Codebase Metrics Registry (mockRepositories.ts): Pre-loaded software telemetry schemas for simulation sandboxing.
-  evidence_state: OBSERVED
-  confidence: HIGH
-  evidence:
-    - src/components/ directory listing
-    - server/ directory files
-  notes: ""
+---
 
-responsibilities:
-  value:
-    - Client UI: Collects custom user configuration, inputs, and renders semantic graphs, dependency DAGs, and interactive metrics.
-    - Express Backend: Authenticates requests via session tokens, serves local code assets, parses local workspace abstract syntax trees, and proxies prompt payloads to external model interfaces.
-    - localScanner.ts: Translates flat files into structured token maps (classes, interfaces, dependency vectors) for downstream LLM grounding.
-  evidence_state: OBSERVED
-  confidence: HIGH
-  evidence:
-    - App.tsx navigation and state handlers
-    - server.ts API controllers
-  notes: ""
+## 1. Architectural Style & Boundaries
 
-dependency_flow:
-  value:
-    - Client SPA makes direct HTTP API requests to server.ts endpoints using custom fetch hooks.
-    - server.ts calls localScanner.ts and mockRepositories.ts internally to assemble workspace telemetry.
-    - server.ts resolves model grounding prompts using either standard Google GenAI SDK or custom header keys to external providers (Groq / OpenRouter).
-  evidence_state: OBSERVED
-  confidence: HIGH
-  evidence:
-    - server.ts imports localScanner
-    - ProfessorChat.tsx initiates API requests to /api/ask
-  notes: ""
+ARIP is built as a **Full-Stack Single-Container Service** combining an Express HTTP backend and a React single-page application (SPA) bundled with Vite.
 
-data_flow:
-  value:
-    - Query Flow: User inputs question inside Professor Chat -> Request sent to /api/ask with context parameters -> Backend determines complexity -> If custom header keys (Groq, OpenRouter) are present, request routes to external completions API, otherwise queries server-side Gemini -> Grounded answer returned to client.
-    - Sync Flow: User inserts GitHub PAT token in Settings -> Request sent to /api/github/sync -> Backend queries api.github.com -> Returns live repo definitions -> React state merges them and saves list to client LocalStorage.
-    - Search Flow: User triggers query in Embeddings tab -> POST sent to /api/embeddings/search -> Backend requests Gemini embedContent vector -> Computes cosine similarity against cache -> Returns sorted matches.
-  evidence_state: OBSERVED
-  confidence: HIGH
-  evidence:
-    - server.ts API implementations
-    - SettingsPanel.tsx, EmbeddingLayer.tsx, ProfessorChat.tsx fetch calls
-  notes: ""
+```
++-------------------------------------------------------------------------+
+|                        Container Sandbox (Port 3000)                    |
+|                                                                         |
+|  +--------------------------------+  +-------------------------------+  |
+|  |       React SPA (Vite)         |  |      Express Backend API      |  |
+|  |                                |  |          (server.ts)          |  |
+|  | - Navigation & View Tabs       |  | - API Auth Guard & APM       |  |
+|  | - AST Graph & Metrics UI       |  | - Model Router & Gateway      |  |
+|  | - Terminal Emulator            |  | - Vector Embeddings Engine    |  |
+|  | - LocalStorage Session State   |  | - GitHub Sync Proxy           |  |
+|  +---------------+----------------+  +---------------+---------------+  |
+|                  |                                   |                  |
+|                  +----------- HTTP Requests ---------+                  |
+|                                                      |                  |
+|                             +------------------------+---------------+  |
+|                             |    localScanner.ts     |  mockRepos    |  |
+|                             |  TS Compiler AST API   |  Benchmarks   |  |
+|                             +------------------------+---------------+  |
++-------------------------------------------------------------------------+
+                                       |
+                   External API Gateways (Outbound HTTPS)
+            +--------------------+--------------------+--------------------+
+            |                    |                    |                    |
+     Google Gemini API      Groq API Gateway    OpenRouter API     GitHub REST API
+     (@google/genai SDK)    (Header Proxy)      (Header Proxy)     (Header Proxy)
+```
 
-source_of_truth:
-  value:
-    - Codebase Structure: The active workspace directory (read via relative fs paths) is the source of truth for AST scanner telemetry.
-    - User Settings: HTML5 LocalStorage in the browser context stores credentials and selected repository preferences.
-  evidence_state: OBSERVED
-  confidence: HIGH
-  evidence:
-    - localScanner.ts reads relative directories
-    - localStorage hooks in SettingsPanel.tsx
-  notes: ""
+### Ingress & Port Constraint
+- The service binds strictly to **host `0.0.0.0` and port `3000`**.
+- In development (`NODE_ENV !== "production"`), Express mounts Vite middleware (`middlewareMode: true`, `appType: "spa"`).
+- In production, Express serves pre-built static assets from `dist/` with SPA HTML fallback (`app.get("*")`).
 
-entry_points:
-  value:
-    - Frontend: src/main.tsx (Vite root entry point loading React DOM)
-    - Backend: server.ts (Express entry point loading static SPA directories)
-  evidence_state: OBSERVED
-  confidence: HIGH
-  evidence:
-    - package.json dev, build, and start scripts
-    - vite.config.ts configuration
-  notes: ""
+---
 
-external_systems:
-  value:
-    - GitHub REST API: Reached via https://api.github.com to query live repositories.
-    - Google Gemini Developer API: Reached via @google/genai SDK to generate grounded chat answers and token embeddings.
-    - Groq Inference API: Reached via https://api.groq.com/openai/v1/chat/completions for fast LLM inference.
-    - OpenRouter Gateway: Reached via https://openrouter.ai/api/v1/chat/completions for custom routed model endpoints.
-  evidence_state: OBSERVED
-  confidence: HIGH
-  evidence:
-    - server.ts custom proxy headers and API fetch paths
-  notes: ""
+## 2. Major Components & Responsibilities
 
-extension_points:
-  value:
-    - Addition of other custom language compilers inside localScanner.ts.
-    - Integration of durable cloud databases (e.g. Firestore / Cloud SQL) to replace local in-memory embeddings cache.
-  evidence_state: INFERRED
-  confidence: HIGH
-  evidence:
-    - TODO.md roadmap segments
-  notes: ""
+### 2.1 Express Backend (`server.ts`)
+- **API Routing & Dispatch**: Exposes endpoints for session bootstrap, repository metadata, fact-grounded Q&A, vector embeddings search, GitHub repository synchronization, and runtime metrics.
+- **Security & Authorization (`apiAuthGuard`)**: Enforces API authentication via Bearer tokens, custom headers (`x-api-token`), or HTTP session cookies (`arip_session`).
+- **Input Validation (`validateAskRequest`)**: Enforces payload structural validation on Q&A requests, verifying repository identifiers, question character limits (max 2000), and history schemas.
+- **Model Router & Proxy**: Evaluates query complexity and routes requests to Groq, OpenRouter, or Google Gemini based on client header configuration.
+- **Vector Embeddings Engine**: Computes 1536-dimensional embeddings using `gemini-embedding-2-preview` and ranks results using mathematical cosine similarity.
+- **APM Instrumentation (`metricsMiddleware`)**: Measures per-route request counts, failure rates, and execution latencies in milliseconds.
 
-configuration:
-  value:
-    - Environmental Keys: process.env.GEMINI_API_KEY
-    - Client Keys: LocalStorage variables ('arip_groq_api_key', 'arip_openrouter_api_key', 'arip_github_token')
-    - System Ports: Port 3000 host 0.0.0.0
-  evidence_state: OBSERVED
-  confidence: HIGH
-  evidence:
-    - .env.example
-    - server.ts code
-  notes: ""
+### 2.2 TypeScript AST Scanner (`server/localScanner.ts`)
+- **Filesystem Traversal (`walkDirectory`)**: Recursively traverses the workspace directory while excluding build artifacts (`node_modules`, `dist`, `.git`, `.llm-context`).
+- **AST Parsing Engine (`parseLocalFile`)**: Uses the native TypeScript Compiler API (`ts.createSourceFile`) to extract classes, interfaces, function declarations, line numbers, and relative import edges.
+- **Fallback Pattern Scanner**: Employs structural regex parsing for non-TypeScript files (JSON, Markdown, configuration files) when AST compilation is inapplicable.
 
-constraints:
-  value:
-    - Port constraint: Single container, strictly bound to port 3000.
-    - Synchronous parsing constraint: Runs single-threaded synchronous directory checks.
-    - Client isolation: No central cloud SQL storage is present; all settings remain completely offline-first inside client's browser context.
-  evidence_state: OBSERVED
-  confidence: HIGH
-  evidence:
-    - localScanner.ts fs operations
-    - package.json script port binds
-  notes: ""
+### 2.3 Benchmark Registry (`server/mockRepositories.ts`)
+- Contains static benchmark definitions (IoT Gateway in C#, Secure Auth Service in Go, Enterprise Billing in TypeScript) used for baseline architectural comparisons and regression testing.
 
-architecture_risks:
-  value:
-    - Running recursive synchronous filesystem searches inside Express request queues can lock event loops under massive project directory states.
-    - Storing private API keys inside LocalStorage is secure from server-side databases, but vulnerable to XSS attacks if untrusted scripts are injected into client static files.
-  evidence_state: INFERRED
-  confidence: HIGH
-  evidence:
-    - fs.readFileSync use in localScanner.ts
-  notes: ""
+### 2.4 Client SPA (`src/App.tsx` & `src/components/`)
+- **App Shell (`src/App.tsx`)**: Manages active tab switching, workspace selection, and compiler lock state.
+- **CCC Compiler (`src/components/CccCompiler.tsx`)**: Triggers real-time AST analysis of active workspaces, displaying symbol tables and dependency maps.
+- **Professor Chat (`src/components/ProfessorChat.tsx`)**: Conversational interface grounded in compiled AST facts and architectural rules.
+- **Architect Agent (`src/components/ArchitectAgentPanel.tsx`)**: Evaluates domain boundary cohesion and detected layer violations.
+- **Causality Impact Analyzer (`src/components/ImpactAnalyzer.tsx`)**: Visualizes dependency directed acyclic graphs (DAGs) and computes refactoring blast radiuses.
+- **Model Router (`src/components/ModelRouter.tsx`)**: Configures provider allocations and complexity thresholds for fast, medium, and complex queries.
+- **Embedding Layer (`src/components/EmbeddingLayer.tsx`)**: Queries the backend vector engine and visualizes cosine similarity scores.
+- **System Governance (`src/components/SystemGovernance.tsx`)**: Displays observability coverage percentages and technical debt ratings.
+- **Settings Panel (`src/components/SettingsPanel.tsx`)**: Manages client-side API keys and GitHub personal access tokens.
+- **Terminal Emulator (`src/components/TerminalEmulator.tsx`)**: CLI interface executing local inspection commands (`ccc system analyze`, `help`, `clear`).
 
-improvement_opportunities:
-  value:
-    - Move file-scanning AST operations into dedicated background Worker Threads or async task cues.
-    - Replace mock repositories completely with physical directory targets inside a dynamic local workspace editor.
-    - Implement Zod validation schemas for all inbound backend API payloads to prevent shell escape attempts.
-  evidence_state: INFERRED
-  confidence: HIGH
-  evidence:
-    - server.ts is currently accepting unfiltered parameters
-  notes: ""
+---
 
-unknown_areas:
-  value:
-    - System performance metrics when parsing code bases that exceed 10 million physical lines of code.
-    - Rate limiting tolerances of external model APIs under rapid multi-turn chat interaction bursts.
-  evidence_state: INFERRED
-  confidence: MEDIUM
-  evidence:
-    - No request rate limits are configured in server.ts
-  notes: ""
+## 3. Data Flow & Workflows
+
+### 3.1 Workspace AST Compilation Flow
+1. User triggers workspace scan or selects `active-workspace`.
+2. Frontend requests `GET /api/repositories/active-workspace`.
+3. Backend invokes `performLocalWorkspaceScan()` in `server/localScanner.ts`.
+4. `walkDirectory` scans workspace files; `ts.createSourceFile` builds AST nodes for each `.ts`/`.tsx` file.
+5. Symbols (classes, interfaces, functions) and dependency edges are assembled into a structured telemetry object.
+6. The JSON payload is returned to the client and rendered in the CCC Compiler view.
+
+### 3.2 Fact-Grounded Q&A Flow (`/api/ask`)
+1. User enters a query in Professor Chat.
+2. Client sends `POST /api/ask` with query text, `repoId`, chat history, and optional routing headers (`x-groq-key`, `x-openrouter-key`).
+3. `apiAuthGuard` verifies session token or cookie.
+4. `validateAskRequest` validates payload types and constraints.
+5. Backend compiles ground-truth context from AST symbols, dependency graphs, architectural rules, and static warnings.
+6. Query complexity is classified (`low`, `medium`, `high`).
+7. If custom provider keys exist in headers, the prompt is dispatched via HTTPS to Groq or OpenRouter; otherwise, it is dispatched to Google Gemini (`gemini-3.5-flash`).
+8. If no cloud keys are configured, the server emits a pre-computed fallback response citing compiled repository facts.
+9. Response is returned to the client and rendered with markdown formatting.
+
+### 3.3 Semantic Vector Search Flow (`/api/embeddings/search`)
+1. User submits a search query in the Embedding Layer view.
+2. Client sends `POST /api/embeddings/search`.
+3. If Google Gemini is available, the server embeds indexed documents (cached in memory) and the incoming query using `gemini-embedding-2-preview`.
+4. Vector dot products and Euclidean norms are computed:
+   $$\text{similarity} = \frac{\mathbf{u} \cdot \mathbf{v}}{\|\mathbf{u}\| \|\mathbf{v}\|}$$
+5. Documents are ranked by cosine similarity and returned to the client.
+
+### 3.4 GitHub Synchronization Flow (`/api/github/sync`)
+1. User enters a GitHub Personal Access Token (PAT) in the Settings view.
+2. Client sends `POST /api/github/sync` with token in request body.
+3. Backend proxies an authenticated request to `https://api.github.com/user/repos`.
+4. Remote repositories are transformed into normalized workspace descriptors and returned to the client.
+5. Client merges remote repositories into local state.
+
+---
+
+## 4. State Management & Persistence
+
+| Data | Storage Location | Durability |
+|---|---|---|
+| Active repository selection | Browser `localStorage` (`arip_selected_repo`) | Survives tab reload |
+| Third-party API keys (Groq, OpenRouter, GitHub PAT) | Browser `localStorage` (`arip_*_key`, `arip_github_token`) | Client-isolated; never stored in server database |
+| Document embeddings cache | Server process memory (`documentEmbeddingsCache`) | Ephemeral; populated on demand, resets on restart |
+| APM runtime metrics | Server process memory (`metricsRegistry`) | Ephemeral; resets on process restart |
+| Local workspace files | Container filesystem | Source of truth for AST scanner |
+
+---
+
+## 5. External Integrations
+
+| Service | Protocol | Authentication | Purpose |
+|---|---|---|---|
+| Google Gemini API | HTTPS (`@google/genai`) | `GEMINI_API_KEY` (server-side environment) | Grounded chat completions and vector embeddings |
+| Groq Inference API | HTTPS REST (`api.groq.com`) | `x-groq-key` request header | Ultra-fast low-latency inference routing |
+| OpenRouter API | HTTPS REST (`openrouter.ai`) | `x-openrouter-key` request header | Custom multi-model LLM completions |
+| GitHub REST API | HTTPS REST (`api.github.com`) | `Authorization: Bearer <PAT>` (proxied from client) | Remote repository synchronization |
+
+---
+
+## 6. Security Boundaries
+
+1. **Server-Side API Key Isolation**: The `GEMINI_API_KEY` is loaded exclusively via `process.env` on the backend and is never sent to the browser or included in Vite client bundles.
+2. **Zero-Telemetry Client Credentials**: Third-party credentials (Groq, OpenRouter, GitHub PAT) reside exclusively in browser `localStorage`. They are transmitted directly in request headers on active proxy calls and are never stored in server logs or persistent backend files.
+3. **API Access Control**: The `apiAuthGuard` middleware gates protected endpoints (`/api/ask`, `/api/embeddings/search`, `/api/github/sync`, `/api/metrics`) using token verification (`Authorization: Bearer`, `x-api-token`, or `arip_session` cookie).
+4. **Input Sanitization**: Request bodies are validated using strict type and length assertions before passing into model prompts, preventing prompt injection and malformed payload crashes.
+
+---
+
+## 7. Architectural Invariants
+
+1. **Port & Host Invariant**: The application must always bind to port `3000` on host `0.0.0.0`. Port `3000` is the single externally routed container port.
+2. **Production Bundle Invariant**:
+   - Frontend compiles to static files in `dist/`.
+   - Backend bundles into a standalone CommonJS file at `dist/server.cjs` via `esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs`.
+   - Production entry command is `node dist/server.cjs`.
+3. **Deterministic AST Invariant**: Given the same filesystem state, `parseLocalFile` in `localScanner.ts` must produce the exact same symbols and dependency edges every time.
+4. **Zero-Crash Fallback Invariant**: In the absence of external API keys (`GEMINI_API_KEY`, Groq, OpenRouter), the backend must gracefully degrade to local simulation mode without throwing unhandled exceptions or returning HTTP 500 errors.
+
+---
+
+## 8. Testing Strategy & Verification
+
+- **Unit Testing**: Vitest runs test suites located in `src/tests/` (e.g., `src/tests/system.test.ts`), asserting structural metrics, symbol counts, technical debt rating formulas, and mock repository integrity.
+- **Static Verification**: TypeScript compiler runs `tsc --noEmit` (`npm run lint`) to guarantee type safety across client and server files.
+- **Production Build Verification**: `npm run build` verifies that both the Vite client bundle and the esbuild backend bundle compile cleanly without errors.
